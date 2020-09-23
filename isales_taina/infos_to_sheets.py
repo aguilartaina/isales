@@ -8,7 +8,6 @@ creds = ServiceAccountCredentials.from_json_keyfile_name('isales_taina/insight_s
 client = gspread.authorize(creds)
 
 sheet = client.open('insight_sales_hubspot').sheet1
-last_row = len(sheet.col_values(1)) + 1
 
 deals = Deal(limit=100)
 
@@ -18,6 +17,6 @@ while True:
         break
     time.sleep(10)
 
-deals.generateHistory()
+deals.generateHistory(list_=True)
     
-sheet.update('A{}:I{}'.format(str(last_row), str(last_row + deals.n_deals - 1)), deals)
+sheet.update('A{}:H{}'.format(str(2), str(1 + len(deals.deals_timeline))), deals.deals_timeline)

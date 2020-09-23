@@ -12,13 +12,12 @@ class Deal():
         self.after = after
         self.deals = {}
         self.deals_timeline = []
-        self.n_deals = 0
         self.headers = ['id', 'createdate', 'closedate', 'dealstage', 'hs_analytics_source', 'amount', 'num_notes', 'timestamp']
         self._properties = ['dealstage', 'hs_analytics_source', 'num_notes',
                             'amount', 'createdate', 'closedate']
         self._propertiesWithHistory = ['closedate', 'dealstage', 'amount', 'num_notes']
         self._dealstage = self._fetchDealStageLabels()
-        self._error = []
+
 
     def fetchNext(self):
 
@@ -37,15 +36,13 @@ class Deal():
             deal_properties['dealstage'] = self._dealstage[deal_properties['dealstage']]
             self.deals[result['id']] = deal_properties
 
-        self.n_deals = len(self.deals)
-
         try:
             self.after = response['paging']['next']['after']
         except KeyError:
             self.after = ''
             print('All deals returned!')
 
-    def generateHistory(self):
+    def generateHistory(self, list_=False):
 
         count = 0
         for deal_id in self.deals.keys():
@@ -55,7 +52,10 @@ class Deal():
             count =+ 1
 
         for deal_id, deal in self.deals.items():
-            self._treatHistory(deal_id,deal)
+            self._treatHistory(deal_id,deal, list_)
+
+        if list_:
+            self.deals_timeline = self._dealTimelineToList()
 
 
     def _APIConnectionV3(self):
@@ -83,7 +83,6 @@ class Deal():
         try:
             json.loads(response.text)
         except:
-            self._error.append((deal_id, response.text))
             return None
 
         return json.loads(response.text)
@@ -100,7 +99,7 @@ class Deal():
             except KeyError:
                 continue
     
-    def _treatHistory(self, deal_id, deal):
+    def _treatHistory(self, deal_id, deal, list_):
 
         prop_value_ts = {}
         unique_date = set()
@@ -116,8 +115,8 @@ class Deal():
                 prop_value_ts[prop].append((value['value'], self._formatTimestamp(value['timestamp'])))
                 unique_date.add(dt.date(self._formatTimestamp(value['timestamp'])))
                 for version in value['versions']:
-                    prop_value_ts[prop].append((version['value'], self._formatTimestamp(value['timestamp'])))
-                    unique_date.add(dt.date(self._formatTimestamp(value['timestamp'])))
+                    prop_value_ts[prop].append((version['value'], self._formatTimestamp(version['timestamp'])))
+                    unique_date.add(dt.date(self._formatTimestamp(version['timestamp'])))
             except KeyError:
                 continue
 
@@ -143,10 +142,22 @@ class Deal():
                     if old_date <= version[1].date() and version[1].date() <= date:
                         deal_pic[prop] = version[0]
 
+            if deal_pic['amount'] == '':
+                deal_pic['amount'] = None
+            if deal_pic['amount'] is not None:
+                deal_pic['amount'] = float(deal_pic['amount'])
             if deal_pic['closedate'] is not None:
                 deal_pic['closedate'] = dt.date(self._formatTimestamp(deal_pic['closedate']))
             if deal_pic['dealstage'] is not None:
                 deal_pic['dealstage'] = self._dealstage[deal_pic['dealstage']]
+
+            if list_:
+                deal_pic['timestamp'] = deal_pic['timestamp'].strftime('%d/%m/%Y')
+                deal_pic['createdate'] = deal_pic['createdate'].strftime('%d/%m/%Y')
+                if deal_pic['closedate'] is not None:
+                    deal_pic['closedate'] = deal_pic['closedate'].strftime('%d/%m/%Y')
+
+
             self.deals_timeline.append(deal_pic) 
 
     def _fetchDealStageLabels(self):
@@ -165,3 +176,6 @@ class Deal():
 
     def _formatTimestamp(self, timestamp):
         return dt.fromtimestamp(int(timestamp)/1000)
+
+    def _dealTimelineToList(self):
+        return [[deal[item] for item in self.headers] for deal in self.deals_timeline]
